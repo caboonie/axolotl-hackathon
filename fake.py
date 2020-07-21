@@ -3,9 +3,12 @@ import json
 import os
 
 # Make a get request to get the latest position of the international space station from the opennotify api.
-response = requests.get("https://api.github.com/repos/caboonie/axolotl-hackathon/pulls")
+token = os.environ['GITHUB_TOKEN'] 
+headers={'Authorization': 'token f69fe57bfd6bbc03426cec2f2cb76cef3769a4f6'}
+response = requests.get("https://api.github.com/repos/caboonie/axolotl-hackathon/pulls", headers=headers)
 
 content = json.loads(response.content)
+print(content)
 pr_summary = []
 
 blocks = [{  
@@ -16,9 +19,11 @@ blocks = [{
         }}]
 for pr in content:
     changes = 0
-    status_response = requests.get(pr['url'] + '/files')
+    # print('pr',content)
+    status_response = requests.get(pr['url'] + '/files', headers=headers)
     files = json.loads(status_response.content)
     for file in files:
+        print('file',file)
         changes += file['changes']
     type_of_review = ''
     if changes < 1000:
@@ -36,10 +41,10 @@ for pr in content:
         "block_id": pr['title'],
         "text": {  
             "type": "mrkdwn",
-            "text": "<{}|*{}*>\n{}  <{}|Jira {}>\nWaiting on: *{}* (suggested <@{}>)".format(pr['url'], pr['title'], type_of_review, jira_link, jira_ticket, 'Review', 'U017UV4FAG1')
+            "text": "<{}|*{}*>\n{}  <{}|Jira {}>\nWaiting on: *{}* (suggested <@{}>)".format(pr['html_url'], pr['title'], type_of_review, jira_link, jira_ticket, 'Review', 'U017UV4FAG1')
         }})
 
-slack_token = 'xoxb-1266930654353-1278198044544-mVjEID1Csz866B8qtuCNSwcL'
+slack_token = os.environ['SLACK_TOKEN'] 
 slack_channel = '#test'
 slack_icon_url = 'https://th.bing.com/th/id/OIP.ScZ7yk9J7_I9J166r5gLTwHaHa?pid=Api&rs=1'
 # slack_user_name = 'axolotl'
@@ -53,5 +58,6 @@ def post_message_to_slack(text, blocks = None):
         'blocks': json.dumps(blocks) if blocks else None
     }).json()	
 
+print(blocks)
 
 post_message_to_slack('Daily PR Summary - {} PRs'.format(len(content)), blocks)
