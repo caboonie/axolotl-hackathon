@@ -30,13 +30,13 @@ for pr in content:
     
     jira_link = pr['body'].split('\n')[0].split(': ')[1]
     jira_ticket = jira_link.split('/')[-1]
-
+   	
     blocks.append({  
         "type": "section",
         "block_id": pr['title'],
         "text": {  
             "type": "mrkdwn",
-            "text": "<{}|*{}*>\n{}  <{}|Jira {}>\nWaiting on: *{}* (suggested <@{}>)".format(pr['url'], pr['title'], type_of_review, jira_link, jira_ticket, 'Review', 'U017UV4FAG1')
+            "text": "<{}|*{}*>\n{}  <{}|Jira {}>\nWaiting on: *{}* (suggested <@{}>)".format(pr['html_url'], pr['title'], type_of_review, jira_link, jira_ticket, 'Review', 'U017UV4FAG1')
         }})
 
 slack_token = 'xoxb-1266930654353-1278198044544-mVjEID1Csz866B8qtuCNSwcL'
