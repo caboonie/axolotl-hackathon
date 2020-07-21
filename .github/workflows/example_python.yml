@@ -30,5 +30,6 @@ jobs:
     - name: Run fake.py
       env:
         SLACK_TOKEN: ${{ secrets.SLACK_BOT_USER_OAUTH_ACCESS_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.OAUTH_GITHUB_TOKEN }}  
       run: |
         python fake.py
