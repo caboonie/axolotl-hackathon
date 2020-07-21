@@ -9,11 +9,14 @@ response = requests.get("https://api.github.com/repos/caboonie/axolotl-hackathon
 content = json.loads(response.content)
 # print(len(content))
 pr_summary = []
+slack_info = ''
+slack_info = slack_info + 'Hi, here are the PRs for \n'
 for pr in content:
-    pr_summary.append(pr['title'])
+	slack_info = slack_info + pr['body'] + ' - ' + pr['url'] + '\n'
+    #pr_summary.append(pr['title'])
 
-
-slack_token = os.environ['SLACK_TOKEN'] 
+print(pr_summary)
+slack_token = 'xoxb-1266930654353-1278198044544-VN1SnYmdtmKgHFXQvHVXBe3h'
 slack_channel = '#test'
 slack_icon_url = 'https://th.bing.com/th/id/OIP.ScZ7yk9J7_I9J166r5gLTwHaHa?pid=Api&rs=1'
 # slack_user_name = 'axolotl'
@@ -26,7 +29,5 @@ def post_message_to_slack(text, blocks = None):
         'icon_url': slack_icon_url,
         'blocks': json.dumps(blocks) if blocks else None
     }).json()	
-
-slack_info = pr_summary
 
 post_message_to_slack(slack_info)
