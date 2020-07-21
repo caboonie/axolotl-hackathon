@@ -4,7 +4,7 @@ import os
 
 # Make a get request to get the latest position of the international space station from the opennotify api.
 token = os.environ['GITHUB_TOKEN'] 
-headers={'Authorization': 'token f69fe57bfd6bbc03426cec2f2cb76cef3769a4f6'}
+headers={'Authorization': 'token {}'.format(token)}
 response = requests.get("https://api.github.com/repos/caboonie/axolotl-hackathon/pulls", headers=headers)
 
 content = json.loads(response.content)
@@ -35,7 +35,7 @@ for pr in content:
     
     jira_link = pr['body'].split('\n')[0].split(': ')[1]
     jira_ticket = jira_link.split('/')[-1]
-   	
+
     blocks.append({  
         "type": "section",
         "block_id": pr['title'],
