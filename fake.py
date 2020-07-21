@@ -35,7 +35,7 @@ for pr in content:
     
     jira_link = pr['body'].split('\n')[0].split(': ')[1]
     jira_ticket = jira_link.split('/')[-1]
-
+   	
     blocks.append({  
         "type": "section",
         "block_id": pr['title'],
