@@ -32,4 +32,4 @@ jobs:
         SLACK_TOKEN: ${{ secrets.SLACK_BOT_USER_OAUTH_ACCESS_TOKEN }}
         GITHUB_TOKEN: ${{ secrets.OAUTH_GITHUB_TOKEN }}  
       run: |
-        python fake.py
+        python pr_summary.py

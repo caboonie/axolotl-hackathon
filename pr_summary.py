@@ -2,6 +2,7 @@ import requests
 import json
 import os
 import datetime
+# from jira_sel import run
 
 # Make a get request to get the latest position of the international space station from the opennotify api.
 token = os.environ['GITHUB_TOKEN'] 
@@ -27,12 +28,12 @@ for pr in content:
     for file in files:
         changes += file['changes']
     type_of_review = ''
-    if changes < 1000:
-        type_of_review = 'Short Review(' + str(changes) + ' changes)'
-    elif (changes < 2000 and changes > 1000):
-        type_of_review = 'Medium Review(' + str(changes) + ' changes)'
+    if changes < 50:
+        type_of_review = ':green_heart: Short Review (' + str(changes) + ' changes)'
+    elif (changes < 1000 and changes > 1000):
+        type_of_review = ':yellow_heart: Medium Review (' + str(changes) + ' changes)'
     else:
-        type_of_review = 'Long Review(' + str(changes) + ' changes)'
+        type_of_review = ':heart: Long Review (' + str(changes) + ' changes)'
     
 
     try:
@@ -43,6 +44,7 @@ for pr in content:
 
     pr_owner = pr['user']['login']
 
+    # determine whether state of reviews and respective reviewer ids
     requested_reviewers = {reviewer['login'] for reviewer in pr["requested_reviewers"]}
     review_response = requests.get(pr['url'] + '/reviews', headers=headers)
     reviews = json.loads(review_response.content)
@@ -52,6 +54,8 @@ for pr in content:
             approved_reviews.add(review['user']['login'])
         if review['state'] =='COMMENTED':
             commented_reviews.add(review['user']['login'])
+
+    # Retrieve and sort comments based on which comments they reply to
     comments_response = requests.get(pr['url'] + '/comments', headers=headers)
     comments = json.loads(comments_response.content)
 
@@ -66,13 +70,14 @@ for pr in content:
         else:
             root_comments.add(comment['id'])
 
-    # if no reviews, then currently waiting for them
+    # if no reviews, then currently waiting for the requested+recommended reviewers
     # else, go through the review comments and check the last commenter - 
-    #  if it is the pr assignee, we need reviewers to look again
-    #  otherwise, assignee needs to respond to feedback
+    #  if it is the pr owner, we need reviewers to look again
+    #  otherwise, pr owner needs to respond to feedback
+    recommended_reviewers = set() # run()
     if len(comments) == 0:
         status = "Waiting for reviews"
-        suggested_workers = requested_reviewers-approved_reviews
+        suggested_workers = requested_reviewers|recommended_reviewers-approved_reviews
     else:
         for root_comment in root_comments:
             curr = root_comment
@@ -84,12 +89,11 @@ for pr in content:
                 break
         else:
             status = 'Awaiting further review'
-            suggested_workers = (commented_reviews | requested_reviewers) -approved_reviews-{pr_owner}
+            suggested_workers = (commented_reviews | requested_reviewers |recommended_reviewers) -approved_reviews-{pr_owner}
     suggested_workers_str = " ".join(["<@{}>".format(user) for user in suggested_workers])
+    reviewers_str = " ".join(["<@{}>".format(user) for user in commented_reviews | approved_reviews])
     
-
-
-    # print('pr',, datetime.datetime.utcnow()) #"updated_at", pushed_at
+    # Determine time since creation and since last update
     time_created = datetime.datetime.strptime(pr['created_at'], PARSE_FORMAT)
     time_since_created = datetime.datetime.utcnow()-time_created
     since_created_str = '{} days'.format(time_since_created.days)
@@ -102,16 +106,18 @@ for pr in content:
     if time_since_updated.days < 1:
         since_updated_str = '{:.1f} hours'.format(time_since_updated.seconds/3600)
     
-
-
+    # Assemble the Slack notification block
+    pr_block_text = "<{}|*{}*>\n{}  <{}|Jira {}>\nMade by {} {} ago, {} since last action\nCurrent reviewers: {}\nStatus: *{}*".format(pr['html_url'], 
+                    pr['title'], type_of_review, jira_link, jira_ticket, pr_owner, since_created_str, 
+                    since_updated_str, reviewers_str or 'None', status)
+    if suggested_workers_str:
+        pr_block_text += ' (suggested workers: {})'.format(suggested_workers_str)
     blocks.append({  
         "type": "section",
         "block_id": pr['title'],
         "text": {  
             "type": "mrkdwn",
-            "text": "<{}|*{}*>\n{}  <{}|Jira {}>\nMade by {} {} ago, {} since last action\nCurrent reviewers: {}\nStatus: *{}* (suggested workers {})".format(pr['html_url'], 
-            pr['title'], type_of_review, jira_link, jira_ticket, pr_owner, since_created_str, 
-            since_updated_str, commented_reviews | approved_reviews, status, suggested_workers_str)
+            "text": pr_block_text
         }})
 
 slack_token = os.environ['SLACK_TOKEN'] 
