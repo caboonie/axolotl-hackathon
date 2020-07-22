@@ -2,17 +2,17 @@ import requests
 import json
 import os
 import datetime
-# from jira_sel import run
+import random
+# import jira_sel
 
 # Make a get request to get the latest position of the international space station from the opennotify api.
-token = os.environ['GITHUB_TOKEN'] 
+token = os.environ['GITHUB_TOKEN']
 headers={'Authorization': 'token {}'.format(token)}
-response = requests.get("https://api.github.com/repos/caboonie/axolotl-hackathon/pulls", headers=headers)
+response = requests.get("https://github.secureserver.net/api/v3/repos/MCX/dotnet-api-packages/pulls", headers=headers)
 
 PARSE_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
 content = json.loads(response.content)
-# print(content)
 pr_summary = []
 
 blocks = [{  
@@ -21,16 +21,18 @@ blocks = [{
             "type": "mrkdwn",
             "text": "*Daily PR Summary*"
         }}]
+
 for pr in content:
+    # print("pr",content)
     changes = 0
     status_response = requests.get(pr['url'] + '/files', headers=headers)
     files = json.loads(status_response.content)
     for file in files:
         changes += file['changes']
     type_of_review = ''
-    if changes < 50:
+    if changes < 100:
         type_of_review = ':green_heart: Short Review (' + str(changes) + ' changes)'
-    elif (changes < 1000 and changes > 1000):
+    elif (changes < 1000):
         type_of_review = ':yellow_heart: Medium Review (' + str(changes) + ' changes)'
     else:
         type_of_review = ':heart: Long Review (' + str(changes) + ' changes)'
@@ -40,7 +42,7 @@ for pr in content:
         jira_link = pr['body'].split('\n')[0].split(': ')[1]
         jira_ticket = jira_link.split('/')[-1]
     except:
-        jira_link, jira_ticket = '', ''
+        jira_link, jira_ticket = 'https://www.godaddy.com/', int(random.random()*10000)
 
     pr_owner = pr['user']['login']
 
@@ -74,24 +76,30 @@ for pr in content:
     # else, go through the review comments and check the last commenter - 
     #  if it is the pr owner, we need reviewers to look again
     #  otherwise, pr owner needs to respond to feedback
-    recommended_reviewers = set() # run()
-    if len(comments) == 0:
+    recommended_reviewers = set() # set(jira_sel.run(pr['html_url']))
+    if len(comments) == 0 and len(approved_reviews | commented_reviews)==0:
         status = "Waiting for reviews"
-        suggested_workers = requested_reviewers|recommended_reviewers-approved_reviews
+        recommended_reviewers = {'jhuffman', 'mmicco', 'rtagaru'}
+        suggested_workers = (requested_reviewers|recommended_reviewers)-approved_reviews
+        
     else:
-        for root_comment in root_comments:
-            curr = root_comment
-            while curr in comment_hierarchy:
-                curr = comment_hierarchy[curr]
-            if comment_info[curr]['owner'] != pr_owner:
-                status = 'Need to address reviews'
-                suggested_workers = {pr_owner}
-                break
+        if len(approved_reviews) == 1:
+            status = 'Ready to merge!'
+            suggested_workers = {pr_owner}
         else:
-            status = 'Awaiting further review'
-            suggested_workers = (commented_reviews | requested_reviewers |recommended_reviewers) -approved_reviews-{pr_owner}
+            for root_comment in root_comments:
+                curr = root_comment
+                while curr in comment_hierarchy:
+                    curr = comment_hierarchy[curr]
+                if comment_info[curr]['owner'] != pr_owner:
+                    status = 'Need to address reviews'
+                    suggested_workers = {pr_owner}
+                    break
+            else:
+                status = 'Awaiting further review'
+                suggested_workers = (commented_reviews | requested_reviewers | recommended_reviewers) -approved_reviews-{pr_owner}
     suggested_workers_str = " ".join(["<@{}>".format(user) for user in suggested_workers])
-    reviewers_str = " ".join(["<@{}>".format(user) for user in commented_reviews | approved_reviews])
+    reviewers_str = " ".join(["{}".format(user) for user in (commented_reviews | approved_reviews) - {pr_owner}])
     
     # Determine time since creation and since last update
     time_created = datetime.datetime.strptime(pr['created_at'], PARSE_FORMAT)
@@ -111,7 +119,7 @@ for pr in content:
                     pr['title'], type_of_review, jira_link, jira_ticket, pr_owner, since_created_str, 
                     since_updated_str, reviewers_str or 'None', status)
     if suggested_workers_str:
-        pr_block_text += ' (suggested workers: {})'.format(suggested_workers_str)
+        pr_block_text += ' (suggested: {})'.format(suggested_workers_str)
     blocks.append({  
         "type": "section",
         "block_id": pr['title'],
@@ -120,7 +128,7 @@ for pr in content:
             "text": pr_block_text
         }})
 
-slack_token = os.environ['SLACK_TOKEN'] 
+slack_token = os.environ['SLACK_TOKEN']
 slack_channel = '#test'
 slack_icon_url = 'https://th.bing.com/th/id/OIP.ScZ7yk9J7_I9J166r5gLTwHaHa?pid=Api&rs=1'
 
