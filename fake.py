@@ -34,15 +34,60 @@ for pr in content:
     else:
         type_of_review = 'Long Review(' + str(changes) + ' changes)'
     
-    jira_link = pr['body'].split('\n')[0].split(': ')[1]
-    jira_ticket = jira_link.split('/')[-1]
 
-    requested_reviewers = [reviewer['login'] for reviewer in pr["requested_reviewers"]]
-    print('requested',requested_reviewers)
-    # print("review comments", pr['review_comments'])
+    try:
+        jira_link = pr['body'].split('\n')[0].split(': ')[1]
+        jira_ticket = jira_link.split('/')[-1]
+    except:
+        jira_link, jira_ticket = '', ''
+
+    pr_owner = pr['user']['login']
+
+    requested_reviewers = {reviewer['login'] for reviewer in pr["requested_reviewers"]}
     review_response = requests.get(pr['url'] + '/reviews', headers=headers)
     reviews = json.loads(review_response.content)
-    # print("reviews", reviews)
+    commented_reviews, approved_reviews = set(), set()
+    for review in reviews:
+        if review['state'] == "APPROVED":
+            approved_reviews.add(review['user']['login'])
+        if review['state'] =='COMMENTED':
+            commented_reviews.add(review['user']['login'])
+    comments_response = requests.get(pr['url'] + '/comments', headers=headers)
+    comments = json.loads(comments_response.content)
+
+    root_comments = set()
+    comment_hierarchy = {}
+    comment_info = {}
+    for comment in comments:
+        comment_info[comment['id']] = {'body':comment['body'], 'owner':comment['user']['login']}
+        if 'in_reply_to_id' in comment:
+            parent = comment['in_reply_to_id']
+            comment_hierarchy[parent] = comment['id']
+        else:
+            root_comments.add(comment['id'])
+
+    # if no reviews, then currently waiting for them
+    # else, go through the review comments and check the last commenter - 
+    #  if it is the pr assignee, we need reviewers to look again
+    #  otherwise, assignee needs to respond to feedback
+    if len(comments) == 0:
+        status = "Waiting for reviews"
+        suggested_workers = requested_reviewers-approved_reviews
+    else:
+        for root_comment in root_comments:
+            curr = root_comment
+            while curr in comment_hierarchy:
+                curr = comment_hierarchy[curr]
+            if comment_info[curr]['owner'] != pr_owner:
+                status = 'Need to address reviews'
+                suggested_workers = {pr_owner}
+                break
+        else:
+            status = 'Awaiting further review'
+            suggested_workers = (commented_reviews | requested_reviewers) -approved_reviews-{pr_owner}
+    suggested_workers_str = " ".join(["<@{}>".format(user) for user in suggested_workers])
+    
+
 
     # print('pr',, datetime.datetime.utcnow()) #"updated_at", pushed_at
     time_created = datetime.datetime.strptime(pr['created_at'], PARSE_FORMAT)
@@ -58,18 +103,20 @@ for pr in content:
         since_updated_str = '{:.1f} hours'.format(time_since_updated.seconds/3600)
     
 
+
     blocks.append({  
         "type": "section",
         "block_id": pr['title'],
         "text": {  
             "type": "mrkdwn",
-            "text": "<{}|*{}*>\n{}  <{}|Jira {}>\n{} old, {} since last action\nWaiting on: *{}* (suggested <@{}>)".format(pr['html_url'], pr['title'], type_of_review, jira_link, jira_ticket, since_created_str, since_updated_str, 'Review', 'U017UV4FAG1')
+            "text": "<{}|*{}*>\n{}  <{}|Jira {}>\nMade by {} {} ago, {} since last action\nCurrent reviewers: {}\nStatus: *{}* (suggested workers {})".format(pr['html_url'], 
+            pr['title'], type_of_review, jira_link, jira_ticket, pr_owner, since_created_str, 
+            since_updated_str, commented_reviews | approved_reviews, status, suggested_workers_str)
         }})
 
 slack_token = os.environ['SLACK_TOKEN'] 
 slack_channel = '#test'
 slack_icon_url = 'https://th.bing.com/th/id/OIP.ScZ7yk9J7_I9J166r5gLTwHaHa?pid=Api&rs=1'
-# slack_user_name = 'axolotl'
 
 def post_message_to_slack(text, blocks = None):
     return requests.post('https://slack.com/api/chat.postMessage', {
